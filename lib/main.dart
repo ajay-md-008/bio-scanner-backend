@@ -36,7 +36,7 @@ class ScannerPage extends StatefulWidget {
 class _ScannerPageState extends State<ScannerPage> {
   // Set this to your local IP or the full Localtunnel URL
   // e.g. '192.168.1.5' or 'https://warm-dog-42.loca.lt'
-  static const String SERVER_URL = 'https://dry-meals-clap.loca.lt'; 
+  static const String SERVER_URL = 'https://bio-scanner-api.onrender.com'; 
   
   final ImagePicker _picker = ImagePicker();
   bool _isUploading = false;
@@ -78,8 +78,7 @@ class _ScannerPageState extends State<ScannerPage> {
       
       var request = http.MultipartRequest('POST', uri);
       
-      // Bypass Localtunnel warning page
-      request.headers['Bypass-Tunnel-Reminder'] = 'true';
+      
       request.headers['User-Agent'] = 'BioScannerApp';
 
       request.fields['patient_id'] = '1'; 

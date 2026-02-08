@@ -45,10 +45,15 @@ def upload_test():
     video.save(video_path)
 
     # Process Video
-    analyzer = OilDropAnalyzer()
-    results = analyzer.analyze_video(video_path)
-    
-    # Save to DB
+    try:
+        analyzer = OilDropAnalyzer()
+        results = analyzer.analyze_video(video_path)
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": f"Vision Engine Failed: {str(e)}"}), 500
+
+    # Save to DB (only if analysis succeeded)
     save_to_db(patient_id, video_path, results)
 
     return jsonify({
