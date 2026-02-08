@@ -1,0 +1,8 @@
+flask
+mysql-connector-python
+opencv-python-headless
+numpy
+scikit-image
+scikit-learn
+joblib
+gunicorn

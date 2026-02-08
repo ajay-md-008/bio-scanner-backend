@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+venv/
+.env
+uploads/
+*.pkl
+.vscode/
+.idea/
+build/
+android/.gradle
+ios/.symlinks
