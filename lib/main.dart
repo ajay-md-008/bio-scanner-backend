@@ -4,7 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
-import 'package:path/path.dart';
+import 'package:path/path.dart' as p;
 
 void main() {
   runApp(const MyApp());
@@ -42,16 +42,82 @@ class _ScannerPageState extends State<ScannerPage> {
   bool _isUploading = false;
   Map<String, dynamic>? _results;
   String? _errorMessage;
+  File? _videoFile; // New state variable for the video file
+
+  Future<bool> _checkServerHealth() async {
+    try {
+      final response = await http.get(Uri.parse('$SERVER_URL/health')).timeout(const Duration(seconds: 10));
+      if (response.statusCode == 200) {
+        return true;
+      }
+    } catch (e) {
+      print('Health Check Failed: $e');
+    }
+    return false;
+  }
 
   Future<void> _recordVideo() async {
+    // 1. Check Server Connection Alert
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (BuildContext context) {
+        return const AlertDialog(
+          content: Row(
+            children: [
+              CircularProgressIndicator(),
+              SizedBox(width: 20),
+              Text("Connecting to Cloud Server..."),
+            ],
+          ),
+        );
+      },
+    );
+
+    bool isConnected = await _checkServerHealth();
+    Navigator.pop(context); // Close loading dialog
+
+    if (!isConnected) {
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text("Connection Error"),
+          content: const Text("Could not connect to the Backend Server.\n\nPossible reasons:\n1. Server is waking up (Wait 30s and try again).\n2. No Internet Connection."),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text("OK"),
+            ),
+          ],
+        ),
+      );
+      return;
+    }
+
+    // Server is Connected! Show brief success message
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Server Connected! Starting Camera...'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 1),
+      ),
+    );
+
+    // 2. Open Camera (Low Resolution for Faster Upload)
     try {
       final XFile? video = await _picker.pickVideo(
         source: ImageSource.camera,
         maxDuration: const Duration(seconds: 30),
+        preferredCameraDevice: CameraDevice.rear,
       );
 
       if (video != null) {
-        _uploadVideo(File(video.path));
+        setState(() {
+          _videoFile = File(video.path);
+          _results = null;
+          _errorMessage = null;
+        });
+        _uploadVideo();
       }
     } catch (e) {
       setState(() {
@@ -60,7 +126,14 @@ class _ScannerPageState extends State<ScannerPage> {
     }
   }
 
-  Future<void> _uploadVideo(File videoFile) async {
+  Future<void> _uploadVideo() async {
+    if (_videoFile == null) {
+      setState(() {
+        _errorMessage = 'No video file selected.';
+      });
+      return;
+    }
+
     setState(() {
       _isUploading = true;
       _errorMessage = null;
@@ -83,20 +156,20 @@ class _ScannerPageState extends State<ScannerPage> {
 
       request.fields['patient_id'] = '1'; 
       
-      var stream = http.ByteStream(videoFile.openRead());
-      var length = await videoFile.length();
+      var stream = http.ByteStream(_videoFile!.openRead());
+      var length = await _videoFile!.length();
       
       var multipartFile = http.MultipartFile(
         'video',
         stream,
         length,
-        filename: basename(videoFile.path),
+        filename: p.basename(_videoFile!.path),
       );
       
       request.files.add(multipartFile);
       
       // Increased timeout to 2 minutes
-      var streamedResponse = await request.send().timeout(const Duration(minutes: 2));
+      var streamedResponse = await request.send().timeout(const Duration(minutes: 5));
       var response = await http.Response.fromStream(streamedResponse);
       
       if (response.statusCode == 200) {
@@ -105,8 +178,10 @@ class _ScannerPageState extends State<ScannerPage> {
           _results = jsonResponse['results'];
         });
       } else {
+        var jsonResponse = json.decode(response.body);
+        var errorMsg = jsonResponse['error'] ?? 'Unknown Error';
         setState(() {
-          _errorMessage = 'Server Error: ${response.statusCode}';
+          _errorMessage = 'Server Error (${response.statusCode}): $errorMsg';
         });
       }
     } catch (e) {

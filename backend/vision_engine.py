@@ -110,9 +110,16 @@ class OilDropAnalyzer:
                 break
             
             frame_count += 1
-            # Skip frames for performance
-            if frame_count % 10 != 0:
+            # Skip frames (process every 15th frame = ~2fps)
+            if frame_count % 15 != 0:
                 continue
+
+            # Resize frame for faster processing (Width: 640px)
+            height, width = frame.shape[:2]
+            if width > 640:
+                scale_factor = 640 / width
+                new_height = int(height * scale_factor)
+                frame = cv2.resize(frame, (640, new_height))
 
             # 1. Preprocessing & Detection
             contour = self.detect_drop(frame)
