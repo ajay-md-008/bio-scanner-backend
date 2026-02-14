@@ -115,25 +115,34 @@ class OilDropAnalyzer:
                 continue
 
             # Resize frame for faster processing (Width: 640px)
+            if frame is None or frame.size == 0:
+                continue
+
             height, width = frame.shape[:2]
             if width > 640:
                 scale_factor = 640 / width
                 new_height = int(height * scale_factor)
-                frame = cv2.resize(frame, (640, new_height))
+                try:
+                    frame = cv2.resize(frame, (640, new_height))
+                except Exception:
+                    continue # Skip frame if resize fails
 
             # 1. Preprocessing & Detection
             contour = self.detect_drop(frame)
             
             if contour is not None:
                 # 2. Extract Features
-                area = cv2.contourArea(contour)
-                M = cv2.moments(contour)
-                if M["m00"] != 0:
-                    cX = int(M["m10"] / M["m00"])
-                    cY = int(M["m01"] / M["m00"])
-                    centroid = (cX, cY)
-                else:
-                    centroid = None
+                try:
+                    area = cv2.contourArea(contour)
+                    M = cv2.moments(contour)
+                    if M["m00"] != 0:
+                        cX = int(M["m10"] / M["m00"])
+                        cY = int(M["m01"] / M["m00"])
+                        centroid = (cX, cY)
+                    else:
+                        centroid = None
+                except Exception:
+                    continue
 
                 # Store data
                 areas.append(area)
@@ -177,7 +186,7 @@ class OilDropAnalyzer:
         irregularity = 0
         perimeter = 0 # Initialize perimeter
         
-        if final_area > 0 and last_valid_frame is not None:
+        if final_area > 0 and 'last_valid_frame' in locals() and last_valid_frame is not None:
              # Use the last valid frame for the final contour check
              final_drop_contour = self.detect_drop(last_valid_frame)
              if final_drop_contour is not None:
@@ -208,34 +217,34 @@ class OilDropAnalyzer:
         if frame is None or frame.size == 0:
             return None
             
-        # Convert to HSV color space
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
-        
-        # Analyze central part of image to find oil color automatically?
-        # For now, assume oil is darker/yellowish against urine background.
-        # Ideally, we used fixed thresholds or adaptive thresholding.
-        
-        # Using Grayscale + Otsu's Thresholding (Robust for contrast)
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        blur = cv2.GaussianBlur(gray, (5, 5), 0)
-        
-        # Threshold: Oil drop is usually distinct from liquid
-        # Note: Depending on lighting, oil might be lighter or darker.
-        # INVERSE thresholding might be needed if oil is dark on light background.
-        ret, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
-        
-        # Morphological operations to remove noise
-        kernel = np.ones((3,3), np.uint8)
-        thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
-        
-        # Find Contours
-        contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-        
-        if contours:
-            # Assume largest contour is the oil drop
-            largest_contour = max(contours, key=cv2.contourArea)
-            if cv2.contourArea(largest_contour) > 100: # Min area filter
-                return largest_contour
+        try:
+            # Convert to HSV color space
+            hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
+            
+            # Using Grayscale + Otsu's Thresholding (Robust for contrast)
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            blur = cv2.GaussianBlur(gray, (5, 5), 0)
+            
+            # Threshold: Oil drop is usually distinct from liquid
+            # Note: Depending on lighting, oil might be lighter or darker.
+            # INVERSE thresholding might be needed if oil is dark on light background.
+            ret, thresh = cv2.threshold(blur, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
+            
+            # Morphological operations to remove noise
+            kernel = np.ones((3,3), np.uint8)
+            thresh = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=2)
+            
+            # Find Contours
+            contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+            
+            if contours:
+                # Assume largest contour is the oil drop
+                largest_contour = max(contours, key=cv2.contourArea)
+                if cv2.contourArea(largest_contour) > 100: # Min area filter
+                    return largest_contour
+        except Exception as e:
+            print(f"Error in detect_drop: {e}")
+            return None
         
         return None
 
