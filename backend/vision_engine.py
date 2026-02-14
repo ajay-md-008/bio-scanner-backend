@@ -149,11 +149,16 @@ class OilDropAnalyzer:
                 
                 final_area = area
                 final_centroid = centroid
+                
+            # Store the last successfully read frame for final analysis
+            # We use .copy() to ensure we have the raw data even if loop variables change
+            # But 'frame' inside loop is valid here.
+            last_valid_frame = frame 
 
         cap.release()
 
         if not areas:
-            return {"error": "No oil drop detected"}
+            return {"error": "No oil drop detected (Video might be empty or too dark)"}
 
         # 3. Calculate Speed
         # Speed = Change in Area / Time
@@ -168,17 +173,21 @@ class OilDropAnalyzer:
 
         # 6. Calculate Detailed Metrics (Based on User Formulas)
         # Using the final contour for these calculations
-        if final_area > 0:
-            perimeter = cv2.arcLength(self.detect_drop(frame), True) if self.detect_drop(frame) is not None else 0
-            if perimeter > 0:
-                circularity = (4 * math.pi * final_area) / (perimeter ** 2)
-                irregularity = 1.0 / circularity if circularity > 0 else 0
-            else:
-                circularity = 0
-                irregularity = 0
-        else:
-            circularity = 0
-            irregularity = 0
+        circularity = 0
+        irregularity = 0
+        perimeter = 0 # Initialize perimeter
+        
+        if final_area > 0 and last_valid_frame is not None:
+             # Use the last valid frame for the final contour check
+             final_drop_contour = self.detect_drop(last_valid_frame)
+             if final_drop_contour is not None:
+                perimeter = cv2.arcLength(final_drop_contour, True)
+                if perimeter > 0:
+                    circularity = (4 * math.pi * final_area) / (perimeter ** 2)
+                    irregularity = 1.0 / circularity if circularity > 0 else 0
+        
+        # Ensure calculated values are safe
+
 
         # Interpretation based on User's Note
         # Circularity ~ 1 => Healthy
@@ -196,6 +205,9 @@ class OilDropAnalyzer:
         }
 
     def detect_drop(self, frame):
+        if frame is None or frame.size == 0:
+            return None
+            
         # Convert to HSV color space
         hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
         
