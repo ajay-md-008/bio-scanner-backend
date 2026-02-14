@@ -166,11 +166,33 @@ class OilDropAnalyzer:
         # 5. Final Shape (Most frequent or last detected)
         final_shape = shapes_detected[-1] if shapes_detected else "Unknown"
 
+        # 6. Calculate Detailed Metrics (Based on User Formulas)
+        # Using the final contour for these calculations
+        if final_area > 0:
+            perimeter = cv2.arcLength(self.detect_drop(frame), True) if self.detect_drop(frame) is not None else 0
+            if perimeter > 0:
+                circularity = (4 * math.pi * final_area) / (perimeter ** 2)
+                irregularity = 1.0 / circularity if circularity > 0 else 0
+            else:
+                circularity = 0
+                irregularity = 0
+        else:
+            circularity = 0
+            irregularity = 0
+
+        # Interpretation based on User's Note
+        # Circularity ~ 1 => Healthy
+        # Circularity <= 0.6 => Irregular
+        
         return {
             "speed": round(speed, 2),
             "direction": direction,
             "shape": final_shape,
-            "duration_sec": round(duration_sec, 2)
+            "duration_sec": round(duration_sec, 2),
+            "circularity": round(circularity, 2),
+            "irregularity": round(irregularity, 2),
+            "area_px": int(final_area),
+            "perimeter_px": int(perimeter) if 'perimeter' in locals() else 0
         }
 
     def detect_drop(self, frame):
