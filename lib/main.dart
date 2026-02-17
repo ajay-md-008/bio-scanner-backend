@@ -5,6 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:http/http.dart' as http;
 import 'package:path/path.dart' as p;
+import 'camera_page.dart';
 
 void main() {
   runApp(const MyApp());
@@ -56,6 +57,10 @@ class _ScannerPageState extends State<ScannerPage> {
     return false;
   }
 
+
+
+  // ... (inside class)
+
   Future<void> _recordVideo() async {
     // 1. Check Server Connection Alert
     showDialog(
@@ -94,36 +99,23 @@ class _ScannerPageState extends State<ScannerPage> {
       return;
     }
 
-    // Server is Connected! Show brief success message
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Server Connected! Starting Camera...'),
-        backgroundColor: Colors.green,
-        duration: Duration(seconds: 1),
+    // Server is Connected! 
+    // Navigate to Custom Camera Page
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => BioCameraPage(
+          onVideoRecorded: (video) {
+            setState(() {
+              _videoFile = File(video.path);
+              _results = null;
+              _errorMessage = null;
+            });
+            _uploadVideo(); // Auto-upload after recording
+          },
+        ),
       ),
     );
-
-    // 2. Open Camera (Low Resolution for Faster Upload)
-    try {
-      final XFile? video = await _picker.pickVideo(
-        source: ImageSource.camera,
-        maxDuration: const Duration(seconds: 30),
-        preferredCameraDevice: CameraDevice.rear,
-      );
-
-      if (video != null) {
-        setState(() {
-          _videoFile = File(video.path);
-          _results = null;
-          _errorMessage = null;
-        });
-        _uploadVideo();
-      }
-    } catch (e) {
-      setState(() {
-        _errorMessage = 'Error picking video: $e';
-      });
-    }
   }
 
   Future<void> _uploadVideo() async {
@@ -178,8 +170,18 @@ class _ScannerPageState extends State<ScannerPage> {
           _results = jsonResponse['results'];
         });
       } else {
-        var jsonResponse = json.decode(response.body);
-        var errorMsg = jsonResponse['error'] ?? 'Unknown Error';
+        String errorMsg;
+        try {
+          var jsonResponse = json.decode(response.body);
+          errorMsg = jsonResponse['error'] ?? 'Unknown Error';
+        } catch (_) {
+          // If response is not JSON (e.g., HTML 502/504 page)
+          if (response.body.contains('<html')) {
+             errorMsg = 'Gateway Error (Server Overload/Timeout)';
+          } else {
+             errorMsg = response.body.length > 50 ? response.body.substring(0, 50) : response.body;
+          }
+        }
         setState(() {
           _errorMessage = 'Server Error (${response.statusCode}): $errorMsg';
         });
@@ -269,6 +271,8 @@ class _ScannerPageState extends State<ScannerPage> {
             _resultRow("Spreading Speed", "${_results!['speed']} px/s"),
             _resultRow("Direction", "${_results!['direction']}"),
             _resultRow("Shape Detected", "${_results!['shape']}"),
+            _resultRow("Circularity", "${_results!['circularity'] ?? 'N/A'}"),
+            _resultRow("Irregularity", "${_results!['irregularity'] ?? 'N/A'}"),
             _resultRow("Duration", "${_results!['duration_sec']} s"),
             const SizedBox(height: 20),
             const Text(
@@ -303,21 +307,22 @@ class _ScannerPageState extends State<ScannerPage> {
   String _interpretResult(Map<String, dynamic> res) {
     String direction = res['direction'];
     String shape = res['shape'];
+    double circularity = res['circularity'] is String ? double.tryParse(res['circularity']) ?? 0.0 : (res['circularity'] ?? 0.0).toDouble();
     
-    // Basic Ayurveda Logic (simplified)
+    // Ayurvedic Logic based on User's Notes
+    if (circularity >= 0.9) {
+      return "Excellent Prognosis (Sadhyasadhya: Sukh Sadhya). Shape is a perfect circle.";
+    } else if (circularity >= 0.7) {
+      return "Good Prognosis. Slight irregularity detected.";
+    } else if (circularity <= 0.6) {
+      return "Irregular Shape detected (Asadhya/Krichra Sadhya). Indicates Dosha imbalance.";
+    }
+    
     if (direction == 'North' || direction == 'East') {
-      return "Prognosis seems Favorable (Good).";
-    } else if (direction == 'South' || direction == 'South-West') {
-      return "Prognosis requires attention.";
+      return "Direction indicates favorable outcome.";
     }
     
-    if (shape.contains('Pearl')) {
-      return "Indicates Vata Balance/Good.";
-    } else if (shape.contains('Snake') || shape.contains('Irregular')) {
-      return "Indicates Dosha Imbalance.";
-    }
-    
-    return "Consult an Ayurvedic Practitioner for detailed analysis.";
+    return "Consult an Ayurvedic Practitioner.";
   }
 }
 

@@ -110,8 +110,8 @@ class OilDropAnalyzer:
                 break
             
             frame_count += 1
-            # Skip frames (process every 15th frame = ~2fps)
-            if frame_count % 15 != 0:
+            # Skip frames (process every 30th frame = ~1fps for Optimization)
+            if frame_count % 30 != 0:
                 continue
 
             # Resize frame for faster processing (Width: 640px)

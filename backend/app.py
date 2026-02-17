@@ -24,6 +24,7 @@ db_config = {
 }
 
 UPLOAD_FOLDER = 'uploads'
+app.config['MAX_CONTENT_LENGTH'] = 200 * 1024 * 1024 # 200MB limit
 os.makedirs(UPLOAD_FOLDER, exist_ok=True)
 
 @app.route('/health', methods=['GET'])
