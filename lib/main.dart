@@ -47,7 +47,9 @@ class _ScannerPageState extends State<ScannerPage> {
 
   Future<bool> _checkServerHealth() async {
     try {
-      final response = await http.get(Uri.parse('$SERVER_URL/health')).timeout(const Duration(seconds: 10));
+      print("Starting Health Check at $SERVER_URL/health...");
+      final response = await http.get(Uri.parse('$SERVER_URL/health')).timeout(const Duration(seconds: 60));
+      print("Response Code: ${response.statusCode}");
       if (response.statusCode == 200) {
         return true;
       }
@@ -86,8 +88,8 @@ class _ScannerPageState extends State<ScannerPage> {
       showDialog(
         context: context,
         builder: (context) => AlertDialog(
-          title: const Text("Connection Error"),
-          content: const Text("Could not connect to the Backend Server.\n\nPossible reasons:\n1. Server is waking up (Wait 30s and try again).\n2. No Internet Connection."),
+          title: const Text("Server Connecting..."),
+          content: const Text("The Cloud Server (Render) is waking up after being idle.\n\nThis usually takes 40-60 seconds. Please wait a moment and try again.\n\n(If you are running locally, check your IP address in main.dart)"),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context),
@@ -133,13 +135,8 @@ class _ScannerPageState extends State<ScannerPage> {
     });
 
     try {
-      // Handle both IP addresses and full URLs
-      Uri uri;
-      if (SERVER_URL.startsWith('http')) {
-         uri = Uri.parse('$SERVER_URL/api/upload_test');
-      } else {
-         uri = Uri.parse('http://$SERVER_URL:5000/api/upload_test');
-      }
+      // Cloud-only Upload URL
+      final Uri uri = Uri.parse('$SERVER_URL/api/upload_test');
       
       var request = http.MultipartRequest('POST', uri);
       
